@@ -1,0 +1,236 @@
+---
+- name: Create php session directory
+  file:
+    path: "/var/lib/php/session/{{ vhost.vhost_name }}"
+    state: directory
+    owner: www-data
+    group: www-data
+    mode: 0755
+
+- name: Create directory for vhost - {{ vhost.vhost_name }}
+  file:
+    path: /var/www/{{ vhost.vhost_name }}/html
+    state: directory
+    mode: "0755"
+    owner: www-data
+    group: www-data
+
+- name: Check if certificate is already exists - {{ vhost.vhost_name }}
+  stat:
+    path: /etc/letsencrypt/certs/fullchain_{{ vhost.vhost_name }}.crt
+  register: certificate_fc_data
+
+- name: Create vhost config - {{ vhost.vhost_name }}
+  template:
+    src: vhosts/nginx-vhost.conf.j2
+    dest: /etc/nginx/vhosts.d/{{ vhost.vhost_name }}.conf
+    force: yes
+    backup: no
+    mode: "0644"
+    owner: www-data
+    group: www-data
+  notify: restart_nginx
+  when: 
+  - not certificate_fc_data.stat.exists
+  register: reload_nginx
+
+- name: Reload nginx to proceed with Let's Encrypt - {{ vhost.vhost_name }}
+  service:
+    name: nginx
+    state: reloaded
+  when:
+  - reload_nginx is defined
+
+- name: Generate Let's Encrypt private key - {{ vhost.vhost_name }}
+  openssl_privatekey:
+    path: "/etc/letsencrypt/keys/{{ vhost.vhost_name }}.key"
+
+- name: Generate Let's Encrypt CSR (with WWW) - {{ vhost.vhost_name }}
+  openssl_csr:
+    path: "/etc/letsencrypt/csrs/{{ vhost.vhost_name }}.csr"
+    privatekey_path: "/etc/letsencrypt/keys/{{ vhost.vhost_name }}.key"
+    subject_alt_name: "DNS:{{ vhost.vhost_name }},DNS:www.{{ vhost.vhost_name }}"
+  when:
+  - vhost.vhost_add_www == true
+
+- name: Generate Let's Encrypt CSR (without WWW) - {{ vhost.vhost_name }}
+  openssl_csr:
+    path: "/etc/letsencrypt/csrs/{{ vhost.vhost_name }}.csr"
+    privatekey_path: "/etc/letsencrypt/keys/{{ vhost.vhost_name }}.key"
+    subject_alt_name: "DNS:{{ vhost.vhost_name }}"
+  when:
+  - vhost.vhost_add_www == false
+
+- name: Begin Let's Encrypt challenges - {{ vhost.vhost_name }}
+  acme_certificate:
+    acme_directory: "{{ acme_directory }}"
+    acme_version: "{{ acme_version }}"
+    account_key_src: "/etc/letsencrypt/account/{{ acme_email }}.key"
+    account_email: "{{ acme_email }}"
+    terms_agreed: 1
+    challenge: "{{ acme_challenge_type }}"
+    csr: "/etc/letsencrypt/csrs/{{ vhost.vhost_name }}.csr"
+    dest: "/etc/letsencrypt/certs/{{ vhost.vhost_name }}.crt"
+    fullchain_dest: "/etc/letsencrypt/certs/fullchain_{{ vhost.vhost_name }}.crt"
+    remaining_days: 91
+  register: acme_challenge_vhost
+
+- name: Create .well-known/acme-challenge directory - {{ vhost.vhost_name }}
+  file:
+    path: "/var/www/{{ vhost.vhost_name }}/html/.well-known/acme-challenge"
+    state: directory
+    owner: www-data
+    group: www-data
+    mode: 0755
+
+- name: Implement http-01 challenge files (without WWW) - {{ vhost.vhost_name }}
+  copy:
+    content: "{{ acme_challenge_vhost['challenge_data'][item]['http-01']['resource_value'] }}"
+    dest: "/var/www/{{ vhost.vhost_name }}/html/{{ acme_challenge_vhost['challenge_data'][item]['http-01']['resource'] }}"
+    owner: www-data
+    group: www-data
+    mode: 0644
+  when: 
+  - vhost.vhost_add_www == false
+  - acme_challenge_vhost['challenge_data'][item] is defined
+  with_items:
+  - "{{ vhost.vhost_name }}"
+
+- name: Implement http-01 challenge files (with WWW) - {{ vhost.vhost_name }}
+  copy:
+    content: "{{ acme_challenge_vhost['challenge_data'][item]['http-01']['resource_value'] }}"
+    dest: "/var/www/{{ vhost.vhost_name }}/html/{{ acme_challenge_vhost['challenge_data'][item]['http-01']['resource'] }}"
+    owner: www-data
+    group: www-data
+    mode: 0644
+  when: 
+  - vhost.vhost_add_www == true
+  - acme_challenge_vhost['challenge_data'][item] is defined
+  with_items:
+  - "{{ vhost.vhost_name }}"
+  - "www.{{ vhost.vhost_name  }}"
+
+- name: Complete Let's Encrypt challenges - {{ vhost.vhost_name }}
+  acme_certificate:
+    acme_directory: "{{ acme_directory }}"
+    acme_version: "{{ acme_version }}"
+    account_key_src: "/etc/letsencrypt/account/{{ acme_email }}.key"
+    account_email: "{{ acme_email }}"
+    challenge: "{{ acme_challenge_type }}"
+    csr: "/etc/letsencrypt/csrs/{{ vhost.vhost_name }}.csr"
+    dest: "/etc/letsencrypt/certs/{{ vhost.vhost_name }}.crt"
+    chain_dest: "/etc/letsencrypt/certs/chain_{{ vhost.vhost_name }}.crt"
+    fullchain_dest: "/etc/letsencrypt/certs/fullchain_{{ vhost.vhost_name }}.crt"
+    data: "{{ acme_challenge_vhost }}"
+
+- name: Check if certificate generated - {{ vhost.vhost_name }}
+  stat:
+    path: /etc/letsencrypt/certs/fullchain_{{ vhost.vhost_name }}.crt
+  register: certificate_fc_data
+
+- name: Create vhost config with SSL - {{ vhost.vhost_name }}
+  template:
+    src: vhosts/nginx-vhost.conf.ssl.j2
+    dest: /etc/nginx/vhosts.d/{{ vhost.vhost_name }}.conf
+    force: yes
+    backup: no
+    mode: "0644"
+    owner: www-data
+    group: www-data
+  when: 
+  - certificate_fc_data.stat.exists
+  notify: restart_nginx
+
+- name: Create php-fpm pool for vhosts - {{ vhost.vhost_name }}
+  template:
+    src: vhosts/php-fpm-vhost.conf.j2
+    dest: /etc/php-fpm.d/{{ vhost.vhost_name }}.conf
+    force: yes
+    backup: no
+    mode: "0644"
+    owner: www-data
+    group: www-data
+  notify: restart_php-fpm
+
+- name: Check if vhost folder is empty - {{ vhost.vhost_name }}
+  find:
+    paths: /var/www/{{ vhost.vhost_name }}/html
+    patterns: "*.*"
+  register: filesFound
+
+- name: Copy test app files if folder is empty - {{ vhost.vhost_name }}
+  template:
+    src: "{{ item }}"
+    dest: /var/www/{{ vhost.vhost_name }}/html/{{ item | basename | regex_replace('\.j2$', '') }}
+    force: yes
+    backup: no
+    mode: "0644"
+    owner: www-data
+    group: www-data
+  with_fileglob:
+    - ../templates/test_app/*.j2
+  when: 
+    - filesFound.matched == 0
+    - vhost.vhost_app == "test"
+
+- name: Create temporary directory for Wordpress files - {{ vhost.vhost_name }}
+  file:
+    path: /tmp/kinderops-lnmp/
+    state: directory
+    mode: "0755"
+    owner: www-data
+    group: www-data
+  when: 
+    - filesFound.matched == 0
+    - vhost.vhost_app == "wordpress"
+
+- name: Download and unpack Wordpress if folder is empty - {{ vhost.vhost_name }}
+  unarchive:
+    src: "{{ wp_applink }}"
+    dest: /tmp/kinderops-lnmp/
+    remote_src: yes
+  when: 
+    - filesFound.matched == 0
+    - vhost.vhost_app == "wordpress"
+
+- name: Move Wordpress to root - {{ vhost.vhost_name }}
+  copy:
+    src: /tmp/kinderops-lnmp/wordpress/
+    dest: /var/www/{{ vhost.vhost_name }}/html
+    remote_src: true
+    owner: www-data
+    group: www-data
+  when: 
+    - filesFound.matched == 0
+    - vhost.vhost_app == "wordpress"
+
+- name: Remove temporary Wordpress files - {{ vhost.vhost_name }}
+  file:
+    path: /tmp/kinderops-lnmp
+    state: absent
+  when: 
+    - filesFound.matched == 0
+    - vhost.vhost_app == "wordpress"
+
+- name: Download and unpack Joomla if folder is empty - {{ vhost.vhost_name }}
+  unarchive:
+    src: "{{ joomla_applink }}"
+    dest: /var/www/{{ vhost.vhost_name }}/html
+    remote_src: yes
+    owner: www-data
+    group: www-data
+  when: 
+    - filesFound.matched == 0
+    - vhost.vhost_app == "joomla"
+
+- name: Create MariaDB database for vhosts - {{ vhost.vhost_name }}
+  mysql_db:
+    name: "{{ vhost.vhost_dbname }}"
+    state: present
+
+- name: Create MariaDB user for vhosts - {{ vhost.vhost_name }}
+  mysql_user:
+    name: "{{ vhost.vhost_dbuser }}"
+    password: "{{ vhost.vhost_dbpass }}"
+    priv: "{{ vhost.vhost_dbname }}.*:ALL"
+    state: present

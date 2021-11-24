@@ -1,0 +1,9 @@
+{% if vhost is defined %}
+  {% set vhost_name = vhost.vhost_name %}
+{% else %}
+  {% set vhost_name = default_vhost_name %}
+{% endif %}
+<h1 align="center">Welcome to {{ vhost_name }}</h1>
+<?php
+    phpinfo();
+?>

@@ -1,0 +1,25 @@
+---
+# handlers file for kinderops-lnmp.role
+
+- name: grub-newkernel
+  command: "grub2-set-default 0"
+
+# Reboot must always be the last handler
+- name: reboot
+  reboot:
+    reboot_timeout: 900
+
+- name: restart_nginx
+  service:
+    name: nginx
+    state: reloaded
+
+- name: restart_php-fpm
+  service:
+    name: php-fpm
+    state: restarted
+
+- name: restart_mariadb
+  service:
+    name: mariadb
+    state: restarted

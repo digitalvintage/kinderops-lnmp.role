@@ -1,0 +1,88 @@
+---
+# defaults file for kinderops-lnmp.role
+
+# List of packages to install
+basic_packages:
+  - mc
+  - nano
+  - atop
+  - htop
+  - wget
+  - curl
+  - net-tools
+  - rsync
+  - yum-cron
+  - openssl
+
+lnmp_packages:
+  - nginx
+  - php-fpm
+  - mariadb
+  - mariadb-server
+  - MySQL-python
+
+php_ext_packages:
+  - php-cli
+  - php-mysql
+  - php-gd
+  - php-ldap
+  - php-odbc
+  - php-pdo
+  - php-pecl-memcache
+  - php-pear
+  - php-xml
+  - php-xmlrpc
+  - php-mbstring
+  - php-snmp
+  - php-soap
+
+#PHP Version (without dot) - must be in Remi's repo
+php_repo: php74
+
+#Apps download links
+wp_applink: https://ru.wordpress.org/latest-ru_RU.tar.gz
+joomla_applink: https://downloads.joomla.org/cms/joomla4/4-0-4/Joomla_4-0-4-Stable-Full_Package.tar.gz?format=gz
+
+# Settings for default/first vhost
+default_vhost_name: example.net
+default_vhost_add_www: false
+default_vhost_dbname: example.net-db
+default_vhost_dbuser: example.net
+default_vhost_dbpass: dbPa$$2000
+default_vhost_app: test
+#_app could test | wordpress | joomla
+
+# Additional vhosts and settings
+# If not set - will be copied from default
+vhosts:
+  - vhost_name: vhost.example.net
+    vhost_add_www: false
+    vhost_dbname: vhost.example.net-db
+    vhost_dbuser: vhost.example.net
+    vhost_dbpass: dbPa$$2001
+    vhost_app: test
+
+  - vhost_name: another.example.net
+    vhost_add_www: true
+    vhost_dbname: another.example.net-db
+    vhost_dbuser: another.example.net
+    vhost_dbpass: dbPa$$2002
+    vhost_app: test
+
+# Let's Encrypt Settings
+acme_challenge_type: http-01
+acme_directory: https://acme-v02.api.letsencrypt.org/directory
+acme_version: 2
+acme_email: vp@digitalvintage.ru
+
+# For ELRepo
+elrepo_repo_gpg_key_url: "/etc/pki/rpm-gpg/RPM-GPG-KEY-elrepo.org"
+elrepo_release_url: "http://www.elrepo.org/elrepo-release-7.0-3.el7.elrepo.noarch.rpm"
+
+# For REMI Repo
+remi_repo_url: "https://rpms.remirepo.net/enterprise/remi-release-{{ ansible_distribution_major_version }}.rpm"
+remi_repo_gpg_key_url: "https://rpms.remirepo.net/RPM-GPG-KEY-remi2021"
+
+# For MariaDB Repo
+mariadb_repo_url: "https://ftp.eenet.ee/pub/mariadb/yum/10.5/centos7-amd64"
+mariadb_repo_gpg_key_url: "https://ftp.eenet.ee/pub/mariadb/yum/RPM-GPG-KEY-MariaDB"

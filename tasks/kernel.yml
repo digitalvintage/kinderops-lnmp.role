@@ -1,0 +1,28 @@
+---
+# tasks file for kinderops-lnmp.role
+
+- name: Check ELRepo
+  shell: rpm -q elrepo-release --qf '%{name}\n' warn=false
+  register: check_elrepo
+  changed_when: check_elrepo.stdout != 'elrepo-release'
+  failed_when: false
+
+- name: Add ELRepo
+  yum: 
+    name: "{{ elrepo_release_url }}"
+    state: present
+  when: check_elrepo is changed
+
+- name: Import ELRepo GPG key
+  rpm_key: 
+    key: "{{ elrepo_repo_gpg_key_url }}"
+    state: present
+
+- name: Install/Update Kernel from ELRepo
+  yum:
+    name: kernel-ml
+    enablerepo: elrepo-kernel
+    state: latest
+  notify: 
+    - grub-newkernel
+    - reboot

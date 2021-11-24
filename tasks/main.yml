@@ -1,0 +1,19 @@
+---
+# tasks file for kinderops-lnmp.role
+
+# Common tasks
+- include: common.yml
+
+# Switch to mainline kernel
+#- include: kernel.yml
+
+# Prepair LNMP Stack
+- include: basic.yml
+
+# Create/modify vhosts
+- include: vhosts.yml
+  loop: "{{ vhosts | flatten(levels=1) }}"
+  loop_control:
+    loop_var: vhost
+  when:
+    - vhosts is defined

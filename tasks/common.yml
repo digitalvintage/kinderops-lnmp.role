@@ -1,0 +1,55 @@
+---
+# tasks file for kinderops-lnmp.role
+
+- name: Add and enable EPEL Repository
+  yum:
+    name: epel-release
+    state: present
+
+- name: Import remi GPG key
+  rpm_key:
+    key: "{{ remi_repo_gpg_key_url }}"
+    state: present
+
+- name: Install main Remi repo
+  yum:
+    name: "{{ remi_repo_url }}"
+    state: present
+
+- name: Import MariaDB GPG key
+  rpm_key:
+    key: "{{ mariadb_repo_gpg_key_url }}"
+    state: present
+
+- name: Install MariaDB repo
+  yum_repository:
+    name: mariadb
+    description: Maria DB Repo
+    baseurl: "{{ mariadb_repo_url }}"
+
+- name: Update system (except kernel)
+  yum:
+    update_cache: yes
+    name: '*'
+    state: latest
+    exclude: kernel*
+
+- name: Disable SELinux
+  selinux:
+    state: disabled
+  notify: reboot
+
+- name: Install basic packages
+  yum:
+    name:
+    - "{{ item }}"
+    state: present
+  with_items: "{{ basic_packages }}"
+
+- name: Create user www-data
+  user:
+    name: "www-data"
+    comment: "Web Services User"
+    state: present
+    shell: "/sbin/nologin"
+    home: "/var/www"
