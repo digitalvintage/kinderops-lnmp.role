@@ -29,7 +29,7 @@
     mode: "0644"
     owner: www-data
     group: www-data
-  notify: restart_nginx
+  notify: reload_nginx
   when: 
   - not certificate_fc_data.stat.exists
   register: reload_nginx
@@ -139,7 +139,7 @@
     group: www-data
   when: 
   - certificate_fc_data.stat.exists
-  notify: restart_nginx
+  notify: reload_nginx
 
 - name: Create php-fpm pool for vhosts - {{ vhost.vhost_name }}
   template:

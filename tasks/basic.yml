@@ -26,7 +26,7 @@
     - mariadb
   notify: 
     - restart_php-fpm
-    - restart_nginx
+    - reload_nginx
     - restart_mariadb
 
 - name: Start MariaDB
@@ -113,7 +113,7 @@
     group: www-data
   with_fileglob:
     - ../templates/nginx_basic/*.j2
-  notify: restart_nginx
+  notify: reload_nginx
 
 - name: Check if certificate is already exists
   stat:
@@ -238,7 +238,7 @@
     group: www-data
   when: 
   - certificate_fc_data.stat.exists
-  notify: restart_nginx
+  notify: reload_nginx
 
 - name: Create php-fpm pool for default vhost
   template:
